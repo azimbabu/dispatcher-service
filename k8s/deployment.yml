@@ -13,6 +13,10 @@ spec:
     metadata:
       labels:
         app: dispatcher-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "9003"
     spec:
       containers:
         - name: dispatcher-service
@@ -27,7 +31,31 @@ spec:
           env:
             - name: BPL_JVM_THREAD_COUNT
               value: "50"
-            - name: SPRING_CLOUD_CONFIG_URI
-              value: http://config-service
-            - name: SPRING_RABBITMQ_HOST
-              value: polar-rabbitmq
+#            - name: SPRING_CLOUD_CONFIG_URI
+#              value: http://config-service
+#            - name: SPRING_RABBITMQ_HOST
+#              value: polar-rabbitmq
+          livenessProbe:
+            httpGet:
+              port: 9003
+              path: /actuator/health/liveness
+              # Increase the initial delay and add failure threshold to allow
+              # the application more time to start and get ready to accept requests.
+              # This is needed for M1 mac until ARM64 support is part of Paketo Buildpacks.
+            #            initialDelaySeconds: 10
+            initialDelaySeconds: 90 # Higher value is only needed for M1 mac
+            periodSeconds: 5
+            failureThreshold: 10 # Only needed for M1 mac
+          readinessProbe:
+            httpGet:
+              port: 9003
+              path: /actuator/health/readiness
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          volumeMounts:
+            - mountPath: /workspace/config
+              name: dispatcher-config-volume
+      volumes:
+        - name: dispatcher-config-volume
+          configMap:
+            name: dispatcher-config
